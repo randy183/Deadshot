@@ -927,117 +927,326 @@ function openMissionBriefing() {
 
 // Start helicopter insertion
 function beginInsertion() {
-    document.getElementById("missionBriefing").style.display = "none";
+document.getElementById("missionBriefing").style.display = "none";
 
-    gameState.started = true;
-    gameState.paused = false;
-    gameState.gameOver = false;
-    gameState.elapsed = 0;
-    gameState.kills = 0;
-    gameState.health = 100;
+gameState.started = true;
+gameState.paused = false;
+gameState.gameOver = false;
+gameState.elapsed = 0;
+gameState.kills = 0;
+gameState.health = 100;
 
-    enemies.length = 0;
-    teammates.length = 0;
+enemies.length = 0;
+teammates.length = 0;
 
-    if (player) {
-        scene.remove(player);
-        player = null;
-    }
+if (player) {
+    scene.remove(player);
+    player = null;
+}
 
-    if (helicopter) {
-        scene.remove(helicopter);
-    }
+if (helicopter) {
+    scene.remove(helicopter);
+    helicopter = null;
+}
 
-    player = createSoldier("YOU", true);
+// Prepare the player and squad.
+player = createSoldier("YOU", true);
+player.position.set(0, 0, 0);
 
-    player.position.set(0, 0, 0);
+const squadPositions = [
+    [-1.7, 0, 1.5],
+    [1.7, 0, 1.5],
+    [0, 0, 2.8]
+];
 
-    const squadPositions = [
-        [-1.7, 0, 1.5],
-        [1.7, 0, 1.5],
-        [0, 0, 2.8]
-    ];
+squadPositions.forEach((position, index) => {
+    const teammate = createSoldier(
+        squadNames[index],
+        false
+    );
 
-    squadPositions.forEach((position, index) => {
-        const teammate = createSoldier(
-            squadNames[index],
-            false
-        );
+    teammate.position.set(...position);
+    teammates.push(teammate);
+});
 
-        teammate.position.set(...position);
-        teammates.push(teammate);
+// Create the transport.
+helicopter = createHelicopter();
+helicopter.position.set(-24, 8, 0);
+
+// Prepare fast ropes.
+window.kronRopes = [];
+
+for (let i = 0; i < 4; i++) {
+    const ropeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x393a32,
+        roughness: 1
     });
 
-    helicopter = createHelicopter();
+    const rope = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 1, 6),
+        ropeMaterial
+    );
 
-    helicopter.position.set(-24, 8, 0);
-
-    deploymentPhase = "approach";
-    deploymentTimer = 0;
-
-    $("hud").style.display = "block";
-    $("controls").style.display = "flex";
-
-    $("missionLabel").textContent = "OPERATION DESERT SPEAR";
-
-    showToast("TRANSPORT INBOUND — PREPARE TO DEPLOY");
+    rope.visible = false;
+    scene.add(rope);
+    window.kronRopes.push(rope);
 }
 
-// Helicopter movement and deployment sequence
-function updateInsertion(dt) {
-    if (!helicopter || deploymentPhase === "complete") return;
+// The helicopter stays airborne throughout insertion.
+deploymentPhase = "approach";
+deploymentTimer = 0;
 
-    deploymentTimer += dt;
+$("hud").style.display = "none";
+$("controls").style.display = "none";
+$("missionLabel").textContent = "OPERATION DESERT SPEAR";
 
-    const rotor = helicopter.userData.rotor;
-    const tailRotor = helicopter.userData.tailRotor;
+// Begin with the general's briefing.
+showToast("INCOMING TRANSMISSION");
 
-    rotor.rotation.y += dt * 25;
-    tailRotor.rotation.x += dt * 35;
+window.kronBriefingLine = 0;
 
-    if (deploymentPhase === "approach") {
-        helicopter.position.x += dt * 7;
+const briefingLines = [
+    "GENERAL: Listen up, soldiers.",
+    "GENERAL: We're approaching Desert Outpost 07.",
+    "GENERAL: Hostile forces occupy the area.",
+    "GENERAL: Secure the outpost and protect your squad.",
+    "GENERAL: Prepare for fast-rope insertion!",
+    "GENERAL: Ropes down! Move when ready!"
+];
 
-        helicopter.position.y =
-            8 - Math.min(deploymentTimer * 1.3, 4);
+window.kronBriefingLines = briefingLines;
 
-        if (helicopter.position.x >= -4) {
-            deploymentPhase = "landing";
-            deploymentTimer = 0;
-            showToast("LANDING ZONE REACHED");
-        }
+if (window.kronSubtitleTimer) {
+    clearInterval(window.kronSubtitleTimer);
+}
+
+window.kronSubtitleTimer = setInterval(() => {
+    if (window.kronBriefingLine >= briefingLines.length) {
+        clearInterval(window.kronSubtitleTimer);
+        window.kronSubtitleTimer = null;
+
+        deploymentPhase = "approach";
+        deploymentTimer = 0;
+
+        showToast("TRANSPORT INBOUND");
+        return;
     }
 
-    else if (deploymentPhase === "landing") {
-        helicopter.position.y = Math.max(
-            3.5,
-            helicopter.position.y - dt * 1.2
+    showKronSubtitle(
+        briefingLines[window.kronBriefingLine]
+    );
+
+    window.kronBriefingLine++;
+}, 2600);
+
+deploymentPhase = "briefing";
+
+}
+
+// Display cinematic subtitles.
+function showKronSubtitle(message) {
+let subtitle = document.getElementById("kronSubtitle");
+
+if (!subtitle) {
+    subtitle = document.createElement("div");
+    subtitle.id = "kronSubtitle";
+
+    Object.assign(subtitle.style, {
+        position: "fixed",
+        left: "8%",
+        right: "8%",
+        bottom: "12%",
+        zIndex: "2000",
+        padding: "14px 18px",
+        background: "rgba(5, 10, 9, 0.88)",
+        border: "1px solid #a5c17b",
+        color: "#ffffff",
+        textAlign: "center",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "16px",
+        fontWeight: "bold",
+        lineHeight: "1.5",
+        pointerEvents: "none"
+    });
+
+    document.body.appendChild(subtitle);
+}
+
+subtitle.textContent = message;
+subtitle.style.display = "block";
+
+}
+
+// Animate the helicopter and squad insertion.
+function updateInsertion(dt) {
+if (!helicopter || deploymentPhase === "complete") return;
+
+deploymentTimer += dt;
+
+helicopter.userData.rotor.rotation.y += dt * 25;
+helicopter.userData.tailRotor.rotation.x += dt * 35;
+
+// Keep the aircraft airborne and hover gently.
+helicopter.position.y = Math.max(
+    4.5,
+    helicopter.position.y
+);
+
+helicopter.position.y += Math.sin(
+    deploymentTimer * 2
+) * dt * 0.3;
+
+if (deploymentPhase === "briefing") {
+    // Briefing plays before the helicopter approaches.
+    return;
+}
+
+if (deploymentPhase === "approach") {
+    helicopter.position.x += dt * 7;
+
+    if (helicopter.position.x >= -4) {
+        helicopter.position.x = -4;
+        deploymentPhase = "hover";
+        deploymentTimer = 0;
+
+        showKronSubtitle(
+            "GENERAL: Fast ropes deployed. Squad, move!"
         );
 
-        if (deploymentTimer > 3) {
-            deploymentPhase = "departure";
-            deploymentTimer = 0;
-
-            showToast("ALPHA SQUAD — MOVE OUT!");
-        }
+        showToast("FAST-ROPE INSERTION");
     }
 
-    else if (deploymentPhase === "departure") {
-        helicopter.position.x -= dt * 9;
-        helicopter.position.y += dt * 2;
+    return;
+}
 
-        if (helicopter.position.x < -15) {
-            scene.remove(helicopter);
-            helicopter = null;
-            deploymentPhase = "complete";
+if (deploymentPhase === "hover") {
+    // Keep the helicopter above the drop zone.
+    helicopter.position.x = -4;
+    helicopter.position.y = 5.5 +
+        Math.sin(deploymentTimer * 2) * 0.12;
 
-            showToast("MISSION ACTIVE — SECURE THE OUTPOST");
+    const ropeOffsets = [-1.1, -0.35, 0.35, 1.1];
+
+    window.kronRopes.forEach((rope, index) => {
+        rope.visible = true;
+        rope.position.set(
+            -4 + ropeOffsets[index],
+            2.8,
+            0.4
+        );
+
+        rope.scale.y = 2.7;
+    });
+
+    if (deploymentTimer > 2) {
+        deploymentPhase = "descending";
+        deploymentTimer = 0;
+    }
+
+    return;
+}
+
+if (deploymentPhase === "descending") {
+    helicopter.position.x = -4;
+    helicopter.position.y = 5.5 +
+        Math.sin(deploymentTimer * 2) * 0.12;
+
+    const ropeOffsets = [-1.1, -0.35, 0.35, 1.1];
+    const descentDuration = 4;
+    const progress = Math.min(
+        deploymentTimer / descentDuration,
+        1
+    );
+
+    const squad = [player, ...teammates];
+
+    squad.forEach((soldier, index) => {
+        if (!soldier) return;
+
+        // Soldiers descend in sequence.
+        const startDelay = index * 0.8;
+        const individualProgress = Math.max(
+            0,
+            Math.min(
+                (deploymentTimer - startDelay) / 2.4,
+                1
+            )
+        );
+
+        if (individualProgress > 0) {
+            soldier.position.set(
+                -4 + ropeOffsets[index],
+                2.8 * (1 - individualProgress),
+                0.4
+            );
         }
+    });
+
+    window.kronRopes.forEach((rope, index) => {
+        rope.position.set(
+            -4 + ropeOffsets[index],
+            2.8 * (1 - progress / 2),
+            0.4
+        );
+
+        rope.scale.y = Math.max(
+            0.05,
+            2.7 * (1 - progress / 2)
+        );
+    });
+
+    if (deploymentTimer >= descentDuration) {
+        squad.forEach((soldier, index) => {
+            if (!soldier) return;
+
+            soldier.position.set(
+                -4 + ropeOffsets[index],
+                0,
+                0.4
+            );
+        });
+
+        window.kronRopes.forEach(rope => {
+            scene.remove(rope);
+        });
+
+        window.kronRopes = [];
+
+        deploymentPhase = "departure";
+        deploymentTimer = 0;
+
+        showKronSubtitle(
+            "GENERAL: All units down. Secure the outpost!"
+        );
+    }
+
+    return;
+}
+
+if (deploymentPhase === "departure") {
+    helicopter.position.x -= dt * 9;
+    helicopter.position.y += dt * 1.5;
+
+    if (helicopter.position.x < -22) {
+        scene.remove(helicopter);
+        helicopter = null;
+
+        deploymentPhase = "complete";
+
+        const subtitle =
+            document.getElementById("kronSubtitle");
+
+        if (subtitle) subtitle.style.display = "none";
+
+        $("hud").style.display = "block";
+        $("controls").style.display = "flex";
+
+        showToast("MISSION ACTIVE — SECURE THE OUTPOST");
     }
 }
 
-// Mouse and touchscreen camera turning
-function setupCameraTurning() {
+      }
+ function setupCameraTurning() {
     const canvas = renderer.domElement;
 
     let touching = false;
