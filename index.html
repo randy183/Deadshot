@@ -507,6 +507,632 @@ window.addEventListener("resize", () => {
 // Later parts will add their updates to this loop.
 const gameClock = new THREE.Clock();
 
+      // ======================================
+// KRON: DESERT TROOP — STAGE 2
+// MISSION, SOLDIERS, HELICOPTER, CAMERA
+// ======================================
+
+let helicopter = null;
+let deploymentPhase = "waiting";
+let deploymentTimer = 0;
+let cameraYaw = 0;
+let cameraPitch = 0.12;
+let moveForward = 0;
+let moveSideways = 0;
+
+const squadNames = ["ALPHA", "BRAVO", "CHARLIE"];
+
+function createMilitaryMaterial(color, roughness = 0.9) {
+    return new THREE.MeshStandardMaterial({
+        color,
+        roughness
+    });
+}
+
+const uniformMat = createMilitaryMaterial(0x667044);
+const darkMat = createMilitaryMaterial(0x292d2b);
+const skinMat = createMilitaryMaterial(0x9b6848);
+const bootMat = createMilitaryMaterial(0x242321);
+const helmetMat = createMilitaryMaterial(0x424b32);
+const gunMat = createMilitaryMaterial(0x181b1a);
+
+// Reusable geometry helpers
+function addPart(parent, geometry, material, x, y, z) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+// Create a recognizable 3D soldier
+function createSoldier(name, isPlayer = false) {
+    const soldier = new THREE.Group();
+
+    // Legs
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.25, 0.62, 0.28),
+        uniformMat,
+        -0.16, 0.43, 0
+    );
+
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.25, 0.62, 0.28),
+        uniformMat,
+        0.16, 0.43, 0
+    );
+
+    // Boots
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.27, 0.13, 0.38),
+        bootMat,
+        -0.16, 0.09, -0.04
+    );
+
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.27, 0.13, 0.38),
+        bootMat,
+        0.16, 0.09, -0.04
+    );
+
+    // Torso and vest
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.66, 0.78, 0.36),
+        uniformMat,
+        0, 1.15, 0
+    );
+
+    addPart(
+        soldier,
+        new THREE.BoxGeometry(0.68, 0.48, 0.39),
+        darkMat,
+        0, 1.18, -0.015
+    );
+
+    // Head
+    addPart(
+        soldier,
+        new THREE.SphereGeometry(0.23, 12, 10),
+        skinMat,
+        0, 1.75, 0
+    );
+
+    // Helmet
+    addPart(
+        soldier,
+        new THREE.SphereGeometry(
+            0.26, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58
+        ),
+        helmetMat,
+        0, 1.88, 0
+    );
+
+    // Arms
+    const leftArm = addPart(
+        soldier,
+        new THREE.BoxGeometry(0.19, 0.65, 0.22),
+        uniformMat,
+        -0.43, 1.18, -0.02
+    );
+
+    const rightArm = addPart(
+        soldier,
+        new THREE.BoxGeometry(0.19, 0.65, 0.22),
+        uniformMat,
+        0.43, 1.18, -0.02
+    );
+
+    leftArm.rotation.z = -0.12;
+    rightArm.rotation.z = 0.12;
+
+    // Rifle
+    const rifle = addPart(
+        soldier,
+        new THREE.BoxGeometry(0.13, 0.13, 0.95),
+        gunMat,
+        0.18, 1.18, -0.55
+    );
+
+    rifle.rotation.x = -0.08;
+
+    // Squad identification marker
+    const markerMat = createMilitaryMaterial(
+        isPlayer ? 0x38aaff : 0x75d66a
+    );
+
+    const marker = addPart(
+        soldier,
+        new THREE.BoxGeometry(0.12, 0.12, 0.12),
+        markerMat,
+        0, 2.15, 0
+    );
+
+    marker.userData.isMarker = true;
+
+    soldier.position.y = 0;
+
+    soldier.userData.name = name;
+    soldier.userData.isPlayer = isPlayer;
+    soldier.userData.leftArm = leftArm;
+    soldier.userData.rightArm = rightArm;
+    soldier.userData.speed = 0;
+
+    scene.add(soldier);
+
+    return soldier;
+}
+
+// Create a simple military transport helicopter
+function createHelicopter() {
+    const heli = new THREE.Group();
+
+    const bodyMat = createMilitaryMaterial(0x46513c);
+    const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x263e4a,
+        metalness: 0.35,
+        roughness: 0.25
+    });
+
+    // Main body
+    addPart(
+        heli,
+        new THREE.CylinderGeometry(0.72, 0.85, 2.7, 12),
+        bodyMat,
+        0, 0, 0
+    ).rotation.z = Math.PI / 2;
+
+    // Cockpit
+    addPart(
+        heli,
+        new THREE.SphereGeometry(0.72, 12, 10),
+        glassMat,
+        1.05, 0.05, 0
+    ).scale.set(1.1, 0.72, 0.9);
+
+    // Tail boom
+    addPart(
+        heli,
+        new THREE.CylinderGeometry(0.12, 0.23, 3.1, 8),
+        bodyMat,
+        -2.45, 0.15, 0
+    ).rotation.z = Math.PI / 2;
+
+    // Tail fin
+    addPart(
+        heli,
+        new THREE.BoxGeometry(0.65, 0.75, 0.12),
+        bodyMat,
+        -3.85, 0.42, 0
+    );
+
+    // Landing skids
+    for (const side of [-0.75, 0.75]) {
+        addPart(
+            heli,
+            new THREE.CylinderGeometry(0.055, 0.055, 2.6, 6),
+            darkMat,
+            0, -0.85, side
+        ).rotation.x = Math.PI / 2;
+
+        addPart(
+            heli,
+            new THREE.CylinderGeometry(0.055, 0.055, 1.4, 6),
+            darkMat,
+            0, -0.65, side
+        );
+    }
+
+    // Main rotor mast
+    addPart(
+        heli,
+        new THREE.CylinderGeometry(0.09, 0.09, 0.6, 8),
+        darkMat,
+        0, 0.72, 0
+    );
+
+    // Spinning main rotor
+    const rotor = new THREE.Group();
+    rotor.position.y = 1.05;
+
+    for (let i = 0; i < 4; i++) {
+        const blade = addPart(
+            rotor,
+            new THREE.BoxGeometry(4.2, 0.045, 0.15),
+            darkMat,
+            0, 0, 0
+        );
+
+        blade.rotation.y = i * Math.PI / 2;
+    }
+
+    heli.add(rotor);
+    heli.userData.rotor = rotor;
+
+    // Tail rotor
+    const tailRotor = new THREE.Group();
+    tailRotor.position.set(-3.9, 0.5, 0.15);
+
+    for (let i = 0; i < 3; i++) {
+        const blade = addPart(
+            tailRotor,
+            new THREE.BoxGeometry(0.12, 0.8, 0.08),
+            darkMat,
+            0, 0, 0
+        );
+
+        blade.rotation.z = i * Math.PI * 2 / 3;
+    }
+
+    heli.add(tailRotor);
+    heli.userData.tailRotor = tailRotor;
+
+    scene.add(heli);
+
+    return heli;
+}
+
+// Mission briefing overlay
+function createMissionBriefing() {
+    if (document.getElementById("missionBriefing")) return;
+
+    const overlay = document.createElement("div");
+
+    overlay.id = "missionBriefing";
+
+    overlay.innerHTML = `
+        <div class="briefing-card">
+            <div class="briefing-kicker">KRON MILITARY COMMAND</div>
+
+            <h1>OPERATION<br>DESERT SPEAR</h1>
+
+            <div class="briefing-line"></div>
+
+            <p class="briefing-location">
+                LOCATION: DESERT OUTPOST 07
+            </p>
+
+            <h3>MISSION OBJECTIVES</h3>
+
+            <ul>
+                <li>Deploy with your squad.</li>
+                <li>Locate and eliminate hostile forces.</li>
+                <li>Secure the outpost.</li>
+                <li>Survive the operation.</li>
+            </ul>
+
+            <div class="briefing-warning">
+                WARNING: HOSTILE FORCES REPORTED IN THE AREA.
+            </div>
+
+            <button id="beginMissionBtn">BEGIN INSERTION</button>
+
+            <button id="backBriefingBtn">BACK</button>
+        </div>
+    `;
+
+    Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "1000",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "18px",
+        background: "rgba(4,10,12,0.94)",
+        color: "#f1f3e8",
+        fontFamily: "Arial, sans-serif",
+        overflowY: "auto"
+    });
+
+    document.body.appendChild(overlay);
+
+    const style = document.createElement("style");
+
+    style.textContent = `
+        .briefing-card {
+            width: min(100%, 420px);
+            padding: 24px;
+            background: #17211c;
+            border: 1px solid #77866a;
+            box-shadow: 0 0 30px #000;
+        }
+
+        .briefing-kicker {
+            color: #a5c17b;
+            font-size: 11px;
+            letter-spacing: 3px;
+        }
+
+        .briefing-card h1 {
+            font-size: 32px;
+            line-height: 1.05;
+            margin: 16px 0;
+        }
+
+        .briefing-line {
+            height: 3px;
+            width: 65px;
+            background: #b5ca72;
+            margin-bottom: 20px;
+        }
+
+        .briefing-location {
+            font-size: 12px;
+            color: #b5ca72;
+        }
+
+        .briefing-card h3 {
+            margin-top: 25px;
+        }
+
+        .briefing-card li {
+            margin: 12px 0;
+            font-size: 14px;
+        }
+
+        .briefing-warning {
+            margin: 22px 0;
+            padding: 12px;
+            border-left: 3px solid #d6a34b;
+            background: #302b20;
+            color: #f0c36b;
+            font-size: 11px;
+        }
+
+        .briefing-card button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 10px;
+            border: 0;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        #beginMissionBtn {
+            background: #a5c17b;
+            color: #152017;
+        }
+
+        #backBriefingBtn {
+            background: #303b35;
+            color: white;
+        }
+    `;
+
+    document.head.appendChild(style);
+
+    document.getElementById("beginMissionBtn").onclick =
+        beginInsertion;
+
+    document.getElementById("backBriefingBtn").onclick = () => {
+        overlay.style.display = "none";
+        $("startScreen").style.display = "flex";
+    };
+}
+
+// Show the briefing first
+function openMissionBriefing() {
+    createMissionBriefing();
+
+    $("startScreen").style.display = "none";
+
+    document.getElementById("missionBriefing").style.display = "flex";
+}
+
+// Start helicopter insertion
+function beginInsertion() {
+    document.getElementById("missionBriefing").style.display = "none";
+
+    gameState.started = true;
+    gameState.paused = false;
+    gameState.gameOver = false;
+    gameState.elapsed = 0;
+    gameState.kills = 0;
+    gameState.health = 100;
+
+    enemies.length = 0;
+    teammates.length = 0;
+
+    if (player) {
+        scene.remove(player);
+        player = null;
+    }
+
+    if (helicopter) {
+        scene.remove(helicopter);
+    }
+
+    player = createSoldier("YOU", true);
+
+    player.position.set(0, 0, 0);
+
+    const squadPositions = [
+        [-1.7, 0, 1.5],
+        [1.7, 0, 1.5],
+        [0, 0, 2.8]
+    ];
+
+    squadPositions.forEach((position, index) => {
+        const teammate = createSoldier(
+            squadNames[index],
+            false
+        );
+
+        teammate.position.set(...position);
+        teammates.push(teammate);
+    });
+
+    helicopter = createHelicopter();
+
+    helicopter.position.set(-24, 8, 0);
+
+    deploymentPhase = "approach";
+    deploymentTimer = 0;
+
+    $("hud").style.display = "block";
+    $("controls").style.display = "flex";
+
+    $("missionLabel").textContent = "OPERATION DESERT SPEAR";
+
+    showToast("TRANSPORT INBOUND — PREPARE TO DEPLOY");
+}
+
+// Helicopter movement and deployment sequence
+function updateInsertion(dt) {
+    if (!helicopter || deploymentPhase === "complete") return;
+
+    deploymentTimer += dt;
+
+    const rotor = helicopter.userData.rotor;
+    const tailRotor = helicopter.userData.tailRotor;
+
+    rotor.rotation.y += dt * 25;
+    tailRotor.rotation.x += dt * 35;
+
+    if (deploymentPhase === "approach") {
+        helicopter.position.x += dt * 7;
+
+        helicopter.position.y =
+            8 - Math.min(deploymentTimer * 1.3, 4);
+
+        if (helicopter.position.x >= -4) {
+            deploymentPhase = "landing";
+            deploymentTimer = 0;
+            showToast("LANDING ZONE REACHED");
+        }
+    }
+
+    else if (deploymentPhase === "landing") {
+        helicopter.position.y = Math.max(
+            3.5,
+            helicopter.position.y - dt * 1.2
+        );
+
+        if (deploymentTimer > 3) {
+            deploymentPhase = "departure";
+            deploymentTimer = 0;
+
+            showToast("ALPHA SQUAD — MOVE OUT!");
+        }
+    }
+
+    else if (deploymentPhase === "departure") {
+        helicopter.position.x -= dt * 9;
+        helicopter.position.y += dt * 2;
+
+        if (helicopter.position.x < -15) {
+            scene.remove(helicopter);
+            helicopter = null;
+            deploymentPhase = "complete";
+
+            showToast("MISSION ACTIVE — SECURE THE OUTPOST");
+        }
+    }
+}
+
+// Mouse and touchscreen camera turning
+function setupCameraTurning() {
+    const canvas = renderer.domElement;
+
+    let touching = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function turnCamera(dx, dy) {
+        cameraYaw -= dx * 0.006;
+
+        cameraPitch += dy * 0.004;
+
+        cameraPitch = Math.max(
+            -0.15,
+            Math.min(0.65, cameraPitch)
+        );
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+        touching = true;
+        lastX = event.clientX;
+        lastY = event.clientY;
+    });
+
+    window.addEventListener("pointerup", () => {
+        touching = false;
+    });
+
+    window.addEventListener("pointermove", event => {
+        if (!touching || !gameState.started ||
+            gameState.paused) return;
+
+        const dx = event.clientX - lastX;
+        const dy = event.clientY - lastY;
+
+        turnCamera(dx, dy);
+
+        lastX = event.clientX;
+        lastY = event.clientY;
+    });
+
+    canvas.addEventListener("touchstart", event => {
+        if (event.touches.length !== 1) return;
+
+        touching = true;
+
+        lastX = event.touches[0].clientX;
+        lastY = event.touches[0].clientY;
+    }, { passive: true });
+
+    canvas.addEventListener("touchmove", event => {
+        if (!touching || !gameState.started ||
+            gameState.paused || event.touches.length !== 1) {
+            return;
+        }
+
+        const touch = event.touches[0];
+
+        turnCamera(
+            touch.clientX - lastX,
+            touch.clientY - lastY
+        );
+
+        lastX = touch.clientX;
+        lastY = touch.clientY;
+    }, { passive: true });
+}
+
+// Follow the player from behind
+function updateFollowCamera() {
+    if (!player) return;
+
+    const distance = 7;
+
+    const targetX =
+        player.position.x + Math.sin(cameraYaw) * distance;
+
+    const targetZ =
+        player.position.z + Math.cos(cameraYaw) * distance;
+
+    camera.position.set(
+        targetX,
+        player.position.y + 3.1 + cameraPitch * 3,
+        targetZ
+    );
+
+    camera.lookAt(
+        player.position.x,
+        player.position.y + 1.2,
+        player.position.z
+    );
+}
+
+// Set up the camera controls once
+setupCameraTurning();
+      
 function animate() {
     requestAnimationFrame(animate);
 
@@ -518,6 +1144,14 @@ function animate() {
         // Player, AI and projectile updates will be added here.
     }
 
+      if (
+    gameState.started &&
+    !gameState.paused &&
+    !gameState.gameOver
+) {
+    updateInsertion(deltaTime);
+    updateFollowCamera();
+      }
     renderer.render(scene, camera);
 }
 
