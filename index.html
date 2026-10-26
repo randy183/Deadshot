@@ -830,6 +830,914 @@ for (let i = 0; i < 8; i++) {
    Character models, weapons, squad AI, enemy vision,
    shooting, scope mechanics, mobile controls and missions.
 */
+    // ==========================================
+// KRON: DESERT TROOP — PART 2
+// SOLDIER MODELS & BATTLEFIELD CHARACTERS
+// ==========================================
+
+const soldierMaterials = {
+    skin: new THREE.MeshStandardMaterial({
+        color: 0x987451,
+        roughness: 0.9
+    }),
+    uniform: new THREE.MeshStandardMaterial({
+        color: 0x596348,
+        roughness: 1
+    }),
+    darkUniform: new THREE.MeshStandardMaterial({
+        color: 0x353e30,
+        roughness: 1
+    }),
+    vest: new THREE.MeshStandardMaterial({
+        color: 0x343a2b,
+        roughness: 1
+    }),
+    boots: new THREE.MeshStandardMaterial({
+        color: 0x29271f,
+        roughness: 1
+    }),
+    helmet: new THREE.MeshStandardMaterial({
+        color: 0x454d35,
+        roughness: 0.9
+    }),
+    weapon: new THREE.MeshStandardMaterial({
+        color: 0x202321,
+        metalness: 0.45,
+        roughness: 0.65
+    }),
+    playerMark: new THREE.MeshStandardMaterial({
+        color: 0x70e0ff,
+        emissive: 0x123344
+    }),
+    enemyMark: new THREE.MeshStandardMaterial({
+        color: 0xb83d32,
+        emissive: 0x35100c
+    })
+};
+
+function createCharacter(type = "enemy") {
+    const soldier = new THREE.Group();
+
+    soldier.userData.type = type;
+    soldier.userData.health = 100;
+    soldier.userData.alive = true;
+    soldier.userData.speed = type === "player" ? 5 : 2.5;
+    soldier.userData.lastSeenPlayer = null;
+    soldier.userData.alerted = false;
+    soldier.userData.shootCooldown = 0;
+    soldier.userData.walkPhase = Math.random() * Math.PI * 2;
+
+    const uniformMaterial = type === "player"
+        ? soldierMaterials.uniform
+        : soldierMaterials.darkUniform;
+
+    function addBox(
+        name,
+        width,
+        height,
+        depth,
+        material,
+        x,
+        y,
+        z
+    ) {
+        const geometry = new THREE.BoxGeometry(
+            width,
+            height,
+            depth
+        );
+
+        const mesh = new THREE.Mesh(
+            geometry,
+            material
+        );
+
+        mesh.name = name;
+        mesh.position.set(x, y, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        soldier.add(mesh);
+        return mesh;
+    }
+
+    function addSphere(
+        name,
+        radius,
+        material,
+        x,
+        y,
+        z
+    ) {
+        const geometry = new THREE.SphereGeometry(
+            radius,
+            12,
+            10
+        );
+
+        const mesh = new THREE.Mesh(
+            geometry,
+            material
+        );
+
+        mesh.name = name;
+        mesh.position.set(x, y, z);
+        mesh.castShadow = true;
+
+        soldier.add(mesh);
+        return mesh;
+    }
+
+    // Torso
+    addBox(
+        "torso",
+        0.62,
+        0.78,
+        0.34,
+        uniformMaterial,
+        0,
+        1.25,
+        0
+    );
+
+    // Tactical vest
+    addBox(
+        "tacticalVest",
+        0.67,
+        0.48,
+        0.38,
+        soldierMaterials.vest,
+        0,
+        1.32,
+        -0.015
+    );
+
+    // Head and helmet
+    addSphere(
+        "head",
+        0.22,
+        soldierMaterials.skin,
+        0,
+        1.88,
+        0
+    );
+
+    addSphere(
+        "helmet",
+        0.245,
+        soldierMaterials.helmet,
+        0,
+        2.045,
+        0
+    );
+
+    // Helmet brim
+    addBox(
+        "helmetBrim",
+        0.47,
+        0.055,
+        0.39,
+        soldierMaterials.helmet,
+        0,
+        1.99,
+        -0.035
+    );
+
+    // Arms
+    const leftArm = addBox(
+        "leftArm",
+        0.19,
+        0.67,
+        0.21,
+        uniformMaterial,
+        -0.43,
+        1.28,
+        -0.015
+    );
+
+    const rightArm = addBox(
+        "rightArm",
+        0.19,
+        0.67,
+        0.21,
+        uniformMaterial,
+        0.43,
+        1.28,
+        -0.015
+    );
+
+    // Hands
+    addSphere(
+        "leftHand",
+        0.105,
+        soldierMaterials.skin,
+        -0.43,
+        0.91,
+        -0.035
+    );
+
+    addSphere(
+        "rightHand",
+        0.105,
+        soldierMaterials.skin,
+        0.43,
+        0.91,
+        -0.035
+    );
+
+    // Legs
+    const leftLeg = addBox(
+        "leftLeg",
+        0.23,
+        0.68,
+        0.27,
+        uniformMaterial,
+        -0.17,
+        0.44,
+        0
+    );
+
+    const rightLeg = addBox(
+        "rightLeg",
+        0.23,
+        0.68,
+        0.27,
+        uniformMaterial,
+        0.17,
+        0.44,
+        0
+    );
+
+    // Boots
+    addBox(
+        "leftBoot",
+        0.25,
+        0.16,
+        0.38,
+        soldierMaterials.boots,
+        -0.17,
+        0.11,
+        -0.055
+    );
+
+    addBox(
+        "rightBoot",
+        0.25,
+        0.16,
+        0.38,
+        soldierMaterials.boots,
+        0.17,
+        0.11,
+        -0.055
+    );
+
+    // Rifle body
+    const rifle = addBox(
+        "rifleBody",
+        0.12,
+        0.12,
+        0.82,
+        soldierMaterials.weapon,
+        0.34,
+        1.24,
+        -0.42
+    );
+
+    rifle.rotation.x = -0.04;
+
+    // Rifle barrel
+    addBox(
+        "rifleBarrel",
+        0.045,
+        0.045,
+        0.42,
+        soldierMaterials.weapon,
+        0.34,
+        1.26,
+        -0.98
+    );
+
+    // Rifle stock
+    addBox(
+        "rifleStock",
+        0.10,
+        0.13,
+        0.24,
+        soldierMaterials.weapon,
+        0.34,
+        1.24,
+        0.10
+    );
+
+    // Distinctive identification marker
+    const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 8, 8),
+        type === "player"
+            ? soldierMaterials.playerMark
+            : soldierMaterials.enemyMark
+    );
+
+    marker.position.set(0, 2.28, 0);
+    marker.name = "identificationMarker";
+    soldier.add(marker);
+
+    // Save animated body parts
+    soldier.userData.leftLeg = leftLeg;
+    soldier.userData.rightLeg = rightLeg;
+    soldier.userData.leftArm = leftArm;
+    soldier.userData.rightArm = rightArm;
+    soldier.userData.marker = marker;
+
+    soldier.traverse((object) => {
+        if (object.isMesh) {
+            object.frustumCulled = false;
+        }
+    });
+
+    return soldier;
+}
+
+
+// ==========================================
+// PLAYER SOLDIER
+// ==========================================
+
+player = createCharacter("player");
+
+player.position.set(0, 0, 8);
+player.rotation.y = Math.PI;
+
+scene.add(player);
+
+
+// ==========================================
+// ENEMY SOLDIER SPAWNING
+// ==========================================
+
+function spawnEnemy(x, z) {
+    const enemy = createCharacter("enemy");
+
+    enemy.position.set(x, 0, z);
+
+    enemy.userData.health = 100;
+    enemy.userData.alive = true;
+    enemy.userData.speed = 2.1 + Math.random() * 0.9;
+    enemy.userData.shootCooldown = 1 + Math.random() * 2;
+    enemy.userData.patrolCenter = new THREE.Vector3(x, 0, z);
+
+    // Random initial facing direction
+    enemy.rotation.y = Math.random() * Math.PI * 2;
+
+    scene.add(enemy);
+    enemies.push(enemy);
+
+    return enemy;
+}
+
+
+// ==========================================
+// INITIAL ENEMY POSITIONS
+// ==========================================
+
+spawnEnemy(-12, -12);
+spawnEnemy(10, -16);
+spawnEnemy(-18, 5);
+spawnEnemy(17, 10);
+spawnEnemy(5, -28);
+spawnEnemy(-7, -32);
+
+
+// ==========================================
+// CHARACTER HELPER FUNCTIONS
+// ==========================================
+
+function distance(a, b) {
+    return Math.sqrt(
+        Math.pow(a.x - b.x, 2) +
+        Math.pow(a.z - b.z, 2)
+    );
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function showToast(message) {
+    const toast = document.getElementById("toast");
+
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.classList.add("show");
+
+    clearTimeout(toast._timer);
+
+    toast._timer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 2200);
+    }
+    // ==========================================
+// KRON: DESERT TROOP — PART 3
+// PLAYER MOVEMENT & MOBILE CONTROLS
+// ==========================================
+
+const movementInput = {
+    forward: 0,
+    sideways: 0,
+    sprint: false,
+    jump: false
+};
+
+let verticalVelocity = 0;
+let playerGrounded = true;
+let cameraYaw = Math.PI;
+let cameraPitch = 0.12;
+
+const movementClock = new THREE.Clock();
+
+const movementSettings = {
+    walkSpeed: 5,
+    sprintSpeed: 8,
+    jumpForce: 6.5,
+    gravity: 17,
+    boundary: 45,
+    lookSensitivity: 0.006
+};
+
+
+// ==========================================
+// CREATE MOBILE CONTROL INTERFACE
+// ==========================================
+
+const mobileControls = document.createElement("div");
+
+mobileControls.id = "desertMobileControls";
+
+mobileControls.style.cssText = `
+    position:fixed;
+    inset:0;
+    z-index:80;
+    pointer-events:none;
+    font-family:Arial,sans-serif;
+    user-select:none;
+    -webkit-user-select:none;
+`;
+
+document.body.appendChild(mobileControls);
+
+
+// ==========================================
+// JOYSTICK
+// ==========================================
+
+const joystickBase = document.createElement("div");
+
+joystickBase.style.cssText = `
+    position:absolute;
+    left:25px;
+    bottom:40px;
+    width:125px;
+    height:125px;
+    border-radius:50%;
+    background:rgba(20,30,20,.45);
+    border:2px solid rgba(220,220,190,.65);
+    box-sizing:border-box;
+    pointer-events:auto;
+    touch-action:none;
+`;
+
+mobileControls.appendChild(joystickBase);
+
+const joystickHandle = document.createElement("div");
+
+joystickHandle.style.cssText = `
+    position:absolute;
+    width:48px;
+    height:48px;
+    left:36.5px;
+    top:36.5px;
+    border-radius:50%;
+    background:rgba(210,220,185,.8);
+    border:2px solid rgba(255,255,255,.8);
+    box-sizing:border-box;
+`;
+
+joystickBase.appendChild(joystickHandle);
+
+let joystickPointer = null;
+
+function updateJoystick(event) {
+    const rect = joystickBase.getBoundingClientRect();
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    let dx = event.clientX - centerX;
+    let dy = event.clientY - centerY;
+
+    const maxDistance = 42;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    if (length > maxDistance) {
+        dx = dx / length * maxDistance;
+        dy = dy / length * maxDistance;
+    }
+
+    joystickHandle.style.left = `${36.5 + dx}px`;
+    joystickHandle.style.top = `${36.5 + dy}px`;
+
+    movementInput.sideways = dx / maxDistance;
+    movementInput.forward = -dy / maxDistance;
+}
+
+function resetJoystick() {
+    joystickPointer = null;
+
+    joystickHandle.style.left = "36.5px";
+    joystickHandle.style.top = "36.5px";
+
+    movementInput.forward = 0;
+    movementInput.sideways = 0;
+}
+
+joystickBase.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+
+    joystickPointer = event.pointerId;
+
+    joystickBase.setPointerCapture(event.pointerId);
+
+    updateJoystick(event);
+});
+
+joystickBase.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== joystickPointer) return;
+
+    updateJoystick(event);
+});
+
+joystickBase.addEventListener("pointerup", resetJoystick);
+joystickBase.addEventListener("pointercancel", resetJoystick);
+
+
+// ==========================================
+// ACTION BUTTONS
+// ==========================================
+
+function createActionButton(label, right, bottom) {
+    const button = document.createElement("button");
+
+    button.textContent = label;
+
+    button.style.cssText = `
+        position:absolute;
+        right:${right}px;
+        bottom:${bottom}px;
+        width:65px;
+        height:65px;
+        border-radius:50%;
+        border:2px solid rgba(230,230,210,.8);
+        background:rgba(40,50,35,.75);
+        color:white;
+        font-size:12px;
+        font-weight:bold;
+        pointer-events:auto;
+        touch-action:none;
+    `;
+
+    mobileControls.appendChild(button);
+
+    return button;
+}
+
+const sprintButton = createActionButton("SPRINT", 28, 40);
+const jumpButton = createActionButton("JUMP", 105, 115);
+const crouchButton = createActionButton("CROUCH", 28, 120);
+
+
+// ==========================================
+// SPRINT
+// ==========================================
+
+sprintButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    movementInput.sprint = true;
+});
+
+function stopSprint() {
+    movementInput.sprint = false;
+}
+
+sprintButton.addEventListener("pointerup", stopSprint);
+sprintButton.addEventListener("pointercancel", stopSprint);
+sprintButton.addEventListener("lostpointercapture", stopSprint);
+
+
+// ==========================================
+// JUMP AND CROUCH
+// ==========================================
+
+let playerCrouching = false;
+
+crouchButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+
+    playerCrouching = !playerCrouching;
+
+    crouchButton.style.background = playerCrouching
+        ? "rgba(130,100,35,.9)"
+        : "rgba(40,50,35,.75)";
+});
+
+jumpButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+
+    if (playerGrounded) {
+        verticalVelocity = movementSettings.jumpForce;
+        playerGrounded = false;
+    }
+});
+
+
+// ==========================================
+// KEYBOARD INPUT
+// ==========================================
+
+const keysDown = {};
+
+window.addEventListener("keydown", (event) => {
+    keysDown[event.code] = true;
+
+    if (
+        ["Space", "ArrowUp", "ArrowDown",
+         "ArrowLeft", "ArrowRight"].includes(event.code)
+    ) {
+        event.preventDefault();
+    }
+
+    if (event.code === "Space" && playerGrounded) {
+        verticalVelocity = movementSettings.jumpForce;
+        playerGrounded = false;
+    }
+
+    if (
+        event.code === "ShiftLeft" ||
+        event.code === "ShiftRight"
+    ) {
+        movementInput.sprint = true;
+    }
+
+    if (event.code === "KeyC") {
+        playerCrouching = !playerCrouching;
+    }
+});
+
+window.addEventListener("keyup", (event) => {
+    keysDown[event.code] = false;
+
+    if (
+        event.code === "ShiftLeft" ||
+        event.code === "ShiftRight"
+    ) {
+        movementInput.sprint = false;
+    }
+});
+
+
+// ==========================================
+// TOUCH CAMERA LOOK
+// ==========================================
+
+let lookPointer = null;
+let lastLookX = 0;
+let lastLookY = 0;
+
+renderer.domElement.style.touchAction = "none";
+
+renderer.domElement.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 2) {
+        return;
+    }
+
+    lookPointer = event.pointerId;
+
+    lastLookX = event.clientX;
+    lastLookY = event.clientY;
+
+    renderer.domElement.setPointerCapture(event.pointerId);
+});
+
+renderer.domElement.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== lookPointer) return;
+
+    const dx = event.clientX - lastLookX;
+    const dy = event.clientY - lastLookY;
+
+    lastLookX = event.clientX;
+    lastLookY = event.clientY;
+
+    cameraYaw -= dx * movementSettings.lookSensitivity;
+    cameraPitch += dy * movementSettings.lookSensitivity;
+
+    cameraPitch = clamp(cameraPitch, -0.25, 0.65);
+});
+
+function stopCameraLook(event) {
+    if (event.pointerId === lookPointer) {
+        lookPointer = null;
+    }
+}
+
+renderer.domElement.addEventListener("pointerup", stopCameraLook);
+renderer.domElement.addEventListener("pointercancel", stopCameraLook);
+
+
+// ==========================================
+// THIRD-PERSON CAMERA
+// ==========================================
+
+const cameraTarget = new THREE.Vector3();
+const cameraDesiredPosition = new THREE.Vector3();
+
+function updatePlayerCamera(deltaTime) {
+    if (!player) return;
+
+    const cameraDistance = 6;
+    const cameraHeight = 2.8;
+
+    cameraTarget.set(
+        player.position.x,
+        player.position.y + (playerCrouching ? 1.1 : 1.5),
+        player.position.z
+    );
+
+    cameraDesiredPosition.set(
+        player.position.x + Math.sin(cameraYaw) * cameraDistance,
+        player.position.y + cameraHeight + cameraPitch * 3,
+        player.position.z + Math.cos(cameraYaw) * cameraDistance
+    );
+
+    camera.position.lerp(
+        cameraDesiredPosition,
+        Math.min(1, deltaTime * 6)
+    );
+
+    camera.lookAt(
+        cameraTarget.x,
+        cameraTarget.y + cameraPitch * 2,
+        cameraTarget.z
+    );
+
+    if (
+        Math.abs(movementInput.forward) > 0.05 ||
+        Math.abs(movementInput.sideways) > 0.05
+    ) {
+        const moveAngle = Math.atan2(
+            -movementInput.sideways,
+            -movementInput.forward
+        );
+
+        const targetRotation = cameraYaw + moveAngle;
+
+        let difference = targetRotation - player.rotation.y;
+
+        while (difference > Math.PI) difference -= Math.PI * 2;
+        while (difference < -Math.PI) difference += Math.PI * 2;
+
+        player.rotation.y += difference * Math.min(1, deltaTime * 9);
+    }
+}
+
+
+// ==========================================
+// PLAYER MOVEMENT
+// ==========================================
+
+function updatePlayerMovement(deltaTime) {
+    if (!player || !player.userData.alive) return;
+
+    let forward = movementInput.forward;
+    let sideways = movementInput.sideways;
+
+    if (keysDown["KeyW"] || keysDown["ArrowUp"]) forward = 1;
+    if (keysDown["KeyS"] || keysDown["ArrowDown"]) forward = -1;
+    if (keysDown["KeyA"] || keysDown["ArrowLeft"]) sideways = -1;
+    if (keysDown["KeyD"] || keysDown["ArrowRight"]) sideways = 1;
+
+    const inputLength = Math.sqrt(
+        forward * forward + sideways * sideways
+    );
+
+    if (inputLength > 1) {
+        forward /= inputLength;
+        sideways /= inputLength;
+    }
+
+    let speed = movementInput.sprint
+        ? movementSettings.sprintSpeed
+        : movementSettings.walkSpeed;
+
+    if (playerCrouching) speed *= 0.45;
+
+    const forwardX = -Math.sin(cameraYaw);
+    const forwardZ = -Math.cos(cameraYaw);
+
+    const rightX = Math.cos(cameraYaw);
+    const rightZ = -Math.sin(cameraYaw);
+
+    player.position.x += (
+        forwardX * forward + rightX * sideways
+    ) * speed * deltaTime;
+
+    player.position.z += (
+        forwardZ * forward + rightZ * sideways
+    ) * speed * deltaTime;
+
+    player.position.x = clamp(
+        player.position.x,
+        -movementSettings.boundary,
+        movementSettings.boundary
+    );
+
+    player.position.z = clamp(
+        player.position.z,
+        -movementSettings.boundary,
+        movementSettings.boundary
+    );
+
+    // Jumping and gravity
+    verticalVelocity -= movementSettings.gravity * deltaTime;
+
+    player.position.y += verticalVelocity * deltaTime;
+
+    if (player.position.y <= 0) {
+        player.position.y = 0;
+        verticalVelocity = 0;
+        playerGrounded = true;
+    }
+
+    // Walking animation
+    if (player.userData.leftLeg && player.userData.rightLeg) {
+        const walking = inputLength > 0.05;
+        const phase = performance.now() * 0.009;
+
+        player.userData.leftLeg.rotation.x = walking
+            ? Math.sin(phase) * 0.45
+            : 0;
+
+        player.userData.rightLeg.rotation.x = walking
+            ? -Math.sin(phase) * 0.45
+            : 0;
+
+        if (player.userData.leftArm && player.userData.rightArm) {
+            player.userData.leftArm.rotation.x = walking
+                ? -Math.sin(phase) * 0.2
+                : 0;
+
+            player.userData.rightArm.rotation.x = walking
+                ? Math.sin(phase) * 0.2
+                : 0;
+        }
+    }
+}
+
+
+// ==========================================
+// TEMPORARY MOVEMENT TEST LOOP
+// ==========================================
+
+let movementLoopStarted = false;
+
+function startMovementLoop() {
+    if (movementLoopStarted) return;
+
+    movementLoopStarted = true;
+
+    function movementFrame() {
+        requestAnimationFrame(movementFrame);
+
+        const deltaTime = Math.min(
+            movementClock.getDelta(),
+            0.05
+        );
+
+        updatePlayerMovement(deltaTime);
+        updatePlayerCamera(deltaTime);
+
+        renderer.render(scene, camera);
+    }
+
+    movementFrame();
+}
+
+
+// ==========================================
+// START MOVEMENT SYSTEM
+// ==========================================
+
+showToast("DESERT TROOP: MOVEMENT SYSTEM READY");
+
+startMovementLoop();
 </script>
 </body>
       </html>
