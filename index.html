@@ -1157,17 +1157,7 @@ function animate() {
 
 animate();
 
-// Temporary deploy action for testing the foundation.
-// Later parts will replace this with the complete game-start sequence.
-$("playBtn").addEventListener("click", () => {
-    gameState.started = true;
-    $("startScreen").style.display = "none";
-    $("hud").style.display = "block";
-    $("controls").style.display = "block";
-
-    showToast("DEPLOYMENT SYSTEM READY");
-});
-
+$("playBtn").addEventListener("click", openMissionBriefing);
 </script>
 </body>
 </html>
