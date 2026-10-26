@@ -1240,12 +1240,217 @@ if (deploymentPhase === "departure") {
 
         $("hud").style.display = "block";
         $("controls").style.display = "flex";
+          window.kronMovementUI.style.display = "block";
 
         showToast("MISSION ACTIVE — SECURE THE OUTPOST");
     }
 }
 
       }
+      // ======================================
+// KRON MOBILE MOVEMENT CONTROLS
+// ======================================
+
+function setupMovementControls() {
+    if (document.getElementById("kronJoystick")) return;
+
+    const style = document.createElement("style");
+
+    style.textContent = `
+        #kronMovementUI {
+            position: fixed;
+            inset: 0;
+            z-index: 1500;
+            pointer-events: none;
+            display: none;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #kronJoystick {
+            position: absolute;
+            left: 25px;
+            bottom: 35px;
+            width: 125px;
+            height: 125px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,.65);
+            background: rgba(15,25,30,.38);
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        #kronStick {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 52px;
+            height: 52px;
+            margin-left: -26px;
+            margin-top: -26px;
+            border-radius: 50%;
+            background: rgba(190,210,180,.85);
+            border: 2px solid white;
+            box-sizing: border-box;
+        }
+
+        #kronMoveLabel {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -23px;
+            color: white;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            text-shadow: 0 1px 4px black;
+        }
+
+        @media (max-width: 600px) {
+            #kronJoystick {
+                left: 18px;
+                bottom: 28px;
+                width: 115px;
+                height: 115px;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+
+    const ui = document.createElement("div");
+    ui.id = "kronMovementUI";
+
+    ui.innerHTML = `
+        <div id="kronJoystick" aria-label="Movement joystick">
+            <div id="kronStick"></div>
+            <div id="kronMoveLabel">MOVE</div>
+        </div>
+    `;
+
+    document.body.appendChild(ui);
+
+    const joystick = document.getElementById("kronJoystick");
+    const stick = document.getElementById("kronStick");
+
+    window.kronMoveInput = { x: 0, y: 0 };
+
+    let activePointer = null;
+
+    function resetJoystick() {
+        window.kronMoveInput.x = 0;
+        window.kronMoveInput.y = 0;
+
+        stick.style.left = "50%";
+        stick.style.top = "50%";
+    }
+
+    function moveStick(event) {
+        const rect = joystick.getBoundingClientRect();
+
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let dx = event.clientX - centerX;
+        let dy = event.clientY - centerY;
+
+        const maxRadius = rect.width * 0.32;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance > maxRadius) {
+            dx = dx / distance * maxRadius;
+            dy = dy / distance * maxRadius;
+        }
+
+        window.kronMoveInput.x = dx / maxRadius;
+        window.kronMoveInput.y = -dy / maxRadius;
+
+        stick.style.left =
+            `calc(50% + ${dx}px)`;
+
+        stick.style.top =
+            `calc(50% + ${dy}px)`;
+    }
+
+    joystick.addEventListener("pointerdown", event => {
+        event.preventDefault();
+
+        if (activePointer !== null) return;
+
+        activePointer = event.pointerId;
+
+        joystick.setPointerCapture(event.pointerId);
+
+        moveStick(event);
+    });
+
+    joystick.addEventListener("pointermove", event => {
+        if (event.pointerId !== activePointer) return;
+
+        event.preventDefault();
+        moveStick(event);
+    });
+
+    function releaseJoystick(event) {
+        if (
+            activePointer !== null &&
+            event.pointerId !== activePointer
+        ) return;
+
+        activePointer = null;
+        resetJoystick();
+    }
+
+    joystick.addEventListener("pointerup", releaseJoystick);
+    joystick.addEventListener("pointercancel", releaseJoystick);
+
+    window.kronMovementUI = ui;
+}
+
+
+// Move the soldier relative to the camera direction.
+function updatePlayerMovement(dt) {
+    if (!player || !window.kronMoveInput) return;
+
+    // Prevent movement during the helicopter cinematic.
+    if (deploymentPhase !== "complete") return;
+
+    if (!gameState.started || gameState.paused ||
+        gameState.gameOver) return;
+
+    const input = window.kronMoveInput;
+
+    const magnitude = Math.hypot(input.x, input.y);
+
+    if (magnitude < 0.08) return;
+
+    const moveX = input.x / Math.max(1, magnitude);
+    const moveY = input.y / Math.max(1, magnitude);
+
+    const speed = 4.5;
+
+    // Movement follows the direction the camera is facing.
+    const dx =
+        moveX * Math.cos(cameraYaw) -
+        moveY * Math.sin(cameraYaw);
+
+    const dz =
+        -moveX * Math.sin(cameraYaw) -
+        moveY * Math.cos(cameraYaw);
+
+    player.position.x += dx * speed * dt;
+    player.position.z += dz * speed * dt;
+
+    // Face the direction of travel.
+    if (player.rotation) {
+        player.rotation.y = Math.atan2(dx, dz);
+    }
+}
+
+
+// Initialize the movement controls.
+setupMovementControls();
  function setupCameraTurning() {
     const canvas = renderer.domElement;
 
@@ -1347,11 +1552,13 @@ function animate() {
 
     const deltaTime = Math.min(gameClock.getDelta(), 0.05);
 
-    if (gameState.started && !gameState.paused && !gameState.gameOver) {
-        gameState.elapsed += deltaTime;
+   if (gameState.started && !gameState.paused && !gameState.gameOver) {
+    gameState.elapsed += deltaTime;
 
-        // Player, AI and projectile updates will be added here.
-    }
+    updatePlayerMovement(deltaTime);
+
+    // Player, AI and projectile updates will be added here.
+      }
 
       if (
     gameState.started &&
