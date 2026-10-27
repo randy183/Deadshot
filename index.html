@@ -1519,34 +1519,41 @@ setupMovementControls();
     }, { passive: true });
 }
 
-// Follow the player from behind
+// Follow the player from behind and aim forward
 function updateFollowCamera() {
     if (!player) return;
 
     const distance = 7;
+    const height = 3.1;
 
+    // Keep the camera behind the direction the player faces.
     const targetX =
-        player.position.x + Math.sin(cameraYaw) * distance;
+        player.position.x - Math.sin(cameraYaw) * distance;
 
     const targetZ =
-        player.position.z + Math.cos(cameraYaw) * distance;
+        player.position.z - Math.cos(cameraYaw) * distance;
 
     camera.position.set(
         targetX,
-        player.position.y + 3.1 + cameraPitch * 3,
+        player.position.y + height + cameraPitch * 3,
         targetZ
     );
 
-    camera.lookAt(
-        player.position.x,
-        player.position.y + 1.2,
-        player.position.z
-    );
-}
+    // Aim at a point in front of the player, not at their feet.
+    const aimDistance = 20;
 
-// Set up the camera controls once
-setupCameraTurning();
-      
+    const aimX =
+        player.position.x + Math.sin(cameraYaw) * aimDistance;
+
+    const aimZ =
+        player.position.z + Math.cos(cameraYaw) * aimDistance;
+
+    camera.lookAt(
+        aimX,
+        player.position.y + 1.5,
+        aimZ
+    );
+      }     
 function animate() {
     requestAnimationFrame(animate);
 
